@@ -1,0 +1,108 @@
+-- 017_admin_teachers_delete.sql
+-- NEW migration. Does NOT modify 001-016.
+--
+-- SYMPTOM:
+--   Admin can add teachers successfully, but the Remove action on the
+--   Teachers screen does not remove the teacher.
+--
+-- ROOT CAUSE (RLS, not code):
+--   A DELETE with RLS enabled and NO matching policy is not an error - it
+--   simply matches 0 rows and deletes 0 rows. public.teachers currently has:
+--       - "Teachers can view own record"  (001:299, recreated by 013)
+--   and NO policy granting the admin role DELETE/ALL (verified: query for
+--   DELETE/ALL policies on public.teachers returns 0 rows), so the admin's
+--   DELETE statement removes nothing. (002:19-21 declares a broader
+--   "Admins can manage teachers" FOR ALL, but 002 is not applied to this
+--   database.)
+--
+-- WHAT THE REMOVE ACTION DOES (TeachersScreen.tsx deleteTeacher, lines 315-346):
+--   1. UPDATE public.classes  SET homeroom_teacher_id = null
+--      WHERE homeroom_teacher_id = teacher.profile_id
+--      (admin already allowed via "Admins can manage classes", 001:59)
+--   2. DELETE FROM public.teachers WHERE id = teacher.teacher_id
+--   It deletes only the one row in public.teachers. It does NOT delete the
+--   profile row and does NOT delete the Supabase Auth user (the confirmation
+--   dialog states this explicitly). Therefore a DELETE-only policy on
+--   public.teachers is sufficient, and no profiles/auth policy is needed.
+--   The screen code is left unchanged.
+--
+-- FIX:
+--   One new, DELETE-only policy for the admin role, gated by the existing
+--   secure helper public.has_role('admin'), which resolves to
+--   profiles.role = 'admin' for the current auth.uid().
+--   public.has_role is SECURITY DEFINER and reads ONLY public.profiles, so it
+--   cannot re-enter public.teachers -> no policy recursion (no 42P17 cycle),
+--   and no profiles policy is created or changed by this file.
+--
+-- WHAT THIS DOES NOT DO:
+--   - does not disable or weaken RLS (teachers stays ENABLE ROW LEVEL SECURITY,
+--     enabled at 001:296)
+--   - does not drop, edit, or replace any existing policy (001-016 all stay)
+--   - is NOT an ALL policy: it grants DELETE only, no INSERT/UPDATE
+--   - grants DELETE to authenticated only; anon gets nothing
+--   - grants no permission on public.profiles -> no profile/auth user can be
+--     deleted by the app through this policy
+--   - uses no service_role, no credentials, no passwords, no functions
+--   - does not modify migrations 001-016, package.json, .env,
+--     supabaseClient.ts, App.js, Edge Functions, or any screen
+--
+-- NAME CHOICE (important):
+--   Uses the distinct name "Admins can delete teachers" so it cannot collide
+--   with 002's "Admins can manage teachers" and can never downgrade or replace
+--   any other policy (policies are OR-ed together).
+--
+-- KNOWN SECONDARY BLOCKER (FK, NOT addressed here - reported only):
+--   Two tables reference teachers(id) WITHOUT ON DELETE (default = NO ACTION,
+--   i.e. blocking):
+--       homework.teacher_id  -> teachers(id)   (001:308)
+--       timetable.teacher_id -> teachers(id)   (001:339)
+--   If a teacher already has homework or timetable rows, the DELETE will fail
+--   with foreign-key violation 23503 even after this policy is applied
+--   (TeachersScreen does not surface that error - it swallows supabase-js
+--   {error} results). Teachers with no homework/timetable rows delete normally.
+--   Read-only check of which teachers would be blocked:
+--       SELECT t.id, p.full_name,
+--              (SELECT count(*) FROM homework h WHERE h.teacher_id = t.id) AS hw,
+--              (SELECT count(*) FROM timetable tt WHERE tt.teacher_id = t.id) AS tt
+--         FROM teachers t JOIN profiles p ON p.id = t.profile_id
+--        ORDER BY hw + tt DESC;
+--   class_subjects.teacher_id references profiles(id) (011:22, ON DELETE
+--   SET NULL), and students/attendance/fees/results do not reference teachers -
+--   only the two NO ACTION FKs above can block. Fixing those FKs would require
+--   a separate, explicitly approved migration (e.g. ON DELETE SET NULL); it is
+--   deliberately NOT part of this file, which is RLS-only per task scope.
+--
+-- APPLY ORDER: any time after 001 (needs public.has_role); works with either
+-- version of has_role (001 or 013). Safe to run once; also re-runnable
+-- (DROP POLICY IF EXISTS + CREATE POLICY, no destructive SQL).
+-- Run manually in the Supabase SQL Editor. NOT executed automatically.
+
+-- DELETE-only permission for the admin role on public.teachers
+DROP POLICY IF EXISTS "Admins can delete teachers" ON public.teachers;
+
+CREATE POLICY "Admins can delete teachers" ON public.teachers
+  FOR DELETE
+  TO authenticated
+  USING (public.has_role('admin'));
+
+-- ============================================================
+-- Read-only verification (run manually, nothing is executed by this file)
+-- ============================================================
+-- 1) Expect a row with polname = 'Admins can delete teachers',
+--    cmd = 'DELETE', roles = {authenticated}:
+--      SELECT polname, cmd, roles, qual
+--        FROM pg_policies
+--       WHERE schemaname = 'public' AND tablename = 'teachers'
+--       ORDER BY polname;
+--
+-- 2) Expect RLS still enabled (relrowsecurity = t):
+--      SELECT relrowsecurity
+--        FROM pg_class
+--       WHERE oid = 'public.teachers'::regclass;
+--
+-- 3) As the signed-in admin, confirm rows are still readable:
+--      SELECT count(*) FROM public.teachers;
+--
+-- 4) Then test the Remove button in the app on a disposable teacher record
+--    that has no homework/timetable rows: the row should disappear after the
+--    handler's automatic load() refresh.

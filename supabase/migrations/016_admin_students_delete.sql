@@ -1,0 +1,97 @@
+-- 016_admin_students_delete.sql
+-- NEW migration. Does NOT modify 001-015.
+--
+-- SYMPTOM:
+--   Admin can view students (015), but pressing "Remove" on the Admin
+--   Students Management screen does not remove the student.
+--
+-- ROOT CAUSE (RLS, not code):
+--   A DELETE with RLS enabled and NO matching policy is not an error - it
+--   simply matches 0 rows and deletes 0 rows. public.students currently has:
+--       - "Students can view own record"      (001:273, recreated by 013)
+--       - "Parents can view linked students"  (006)
+--       - "Admins can view students"          (015, SELECT only)
+--   and NO policy granting the admin role DELETE/ALL (verified: query for
+--   DELETE/ALL policies on public.students returns 0 rows), so the admin's
+--   DELETE statement removes nothing.
+--
+-- WHAT THE REMOVE ACTION IS SUPPOSED TO DELETE (handler inspection):
+--   StudentListScreen.tsx handleDelete (line 108-129) runs exactly one
+--   statement:
+--       await supabase.from('students').delete().eq('id', studentId)
+--   It deletes only the one row in public.students. It does NOT delete the
+--   profile row and does NOT delete the Supabase Auth user (the confirmation
+--   dialog states this explicitly). Therefore a DELETE-only policy on
+--   public.students is sufficient, and no profiles/auth policy is needed.
+--
+-- FOREIGN KEY SAFETY (nothing can block the delete):
+--   Every table referencing public.students uses ON DELETE CASCADE:
+--       homework_submissions.student_id  -> students(id) CASCADE (004:18)
+--       parent_students.student_id       -> students(id) CASCADE (006:28)
+--       transport_students.student_id    -> students(id) CASCADE (008:41)
+--       complaints.student_id            -> students(id) CASCADE (009:16)
+--   So removing a student also removes those linked child rows (referential
+--   actions run as the table owner and are not gated by the caller's RLS).
+--   attendance/fees/results.student_id reference profiles(id) (001:119/150/213),
+--   and students.user_id/profile_id are outgoing FKs - deleting the student
+--   row leaves the profile and the auth user untouched, as designed.
+--
+-- FIX:
+--   One new, DELETE-only policy for the admin role, gated by the existing
+--   secure helper public.has_role('admin'), which resolves to
+--   profiles.role = 'admin' for the current auth.uid().
+--   public.has_role is SECURITY DEFINER and reads ONLY public.profiles, so it
+--   cannot re-enter public.students -> no policy recursion (no 42P17 cycle),
+--   and no profiles policy is created or changed by this file.
+--
+-- WHAT THIS DOES NOT DO:
+--   - does not disable or weaken RLS (students stays ENABLE ROW LEVEL SECURITY)
+--   - does not drop, edit, or replace any existing policy (001-015 all stay)
+--   - is NOT a broad ALL policy: it grants DELETE only, no INSERT/UPDATE
+--   - grants DELETE to authenticated only; anon gets nothing
+--   - grants no permission on public.profiles -> no profile/auth user can be
+--     deleted by the app through this policy
+--   - uses no service_role, no credentials, no passwords, no functions
+--   - does not modify migrations 001-015, package.json, .env,
+--     supabaseClient.ts, App.js, Edge Functions, or any screen
+--
+-- NAME CHOICE (important):
+--   002_admin_access_policies.sql:14-16 declares a broader policy
+--   "Admins can manage students" (FOR ALL), but it is not present in this
+--   database. This file deliberately uses the distinct name
+--   "Admins can delete students" so that it cannot collide with 002 and can
+--   never downgrade or replace any other policy (policies are OR-ed together).
+--
+-- APPLY ORDER: any time after 001 (needs public.has_role); works with either
+-- version of has_role (001 or 013). Safe to run once; also re-runnable
+-- (DROP POLICY IF EXISTS + CREATE POLICY, no destructive SQL).
+-- Run manually in the Supabase SQL Editor. NOT executed automatically.
+
+-- DELETE-only permission for the admin role on public.students
+DROP POLICY IF EXISTS "Admins can delete students" ON public.students;
+
+CREATE POLICY "Admins can delete students" ON public.students
+  FOR DELETE
+  TO authenticated
+  USING (public.has_role('admin'));
+
+-- ============================================================
+-- Read-only verification (run manually, nothing is executed by this file)
+-- ============================================================
+-- 1) Expect a row with polname = 'Admins can delete students',
+--    cmd = 'DELETE', roles = {authenticated}:
+--      SELECT polname, cmd, roles, qual
+--        FROM pg_policies
+--       WHERE schemaname = 'public' AND tablename = 'students'
+--       ORDER BY polname;
+--
+-- 2) Expect RLS still enabled (relrowsecurity = t):
+--      SELECT relrowsecurity
+--        FROM pg_class
+--       WHERE oid = 'public.students'::regclass;
+--
+-- 3) As the signed-in admin, confirm 015 still allows reading, e.g.:
+--      SELECT count(*) FROM public.students;
+--
+-- 4) Then test the Remove button in the app on a disposable student record:
+--    the row should disappear from the list after the automatic refresh.
