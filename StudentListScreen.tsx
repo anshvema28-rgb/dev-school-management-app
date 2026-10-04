@@ -106,26 +106,45 @@ export default function StudentListScreen({ route, navigation }: any) {
   }, [])
 
   const handleDelete = async (studentId: string) => {
-    Alert.alert(
-      'Remove Student',
-      'Remove this student record? The Supabase Auth account is NOT deleted (that requires a secure server-side process).',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await supabase.from('students').delete().eq('id', studentId)
-              fetchStudents()
-              Alert.alert('Success', 'Student record removed')
-            } catch (err: any) {
-              Alert.alert('Error', err.message)
-            }
+    const message =
+      'Remove this student record? The Supabase Auth account is NOT deleted (that requires a secure server-side process).'
+
+    // Confirm before deleting.
+    // WEB: react-native-web's Alert.alert() is a no-op (it renders nothing),
+    // so the browser's window.confirm() is used instead.
+    // NATIVE: the original Alert.alert() flow, unchanged.
+    if (Platform.OS === 'web') {
+      if (!window.confirm(message)) return // Cancel → stop immediately, no delete
+    } else {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        Alert.alert('Remove Student', message, [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => resolve(true),
           },
-        },
-      ]
-    )
+        ])
+      })
+      if (!confirmed) return // Cancel → stop immediately, no delete
+    }
+
+    try {
+      const { error } = await supabase.from('students').delete().eq('id', studentId)
+      if (error) throw error
+      fetchStudents()
+      if (Platform.OS === 'web') {
+        window.alert('Student record removed')
+      } else {
+        Alert.alert('Success', 'Student record removed')
+      }
+    } catch (err: any) {
+      if (Platform.OS === 'web') {
+        window.alert(err.message)
+      } else {
+        Alert.alert('Error', err.message)
+      }
+    }
   }
 
   // ---- Create Student Account (secure Edge Function) ----
