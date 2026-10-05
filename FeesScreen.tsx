@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
 import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
@@ -201,7 +201,7 @@ export default function FeesScreen({ route, navigation }: any) {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
       <View style={styles.header}>
@@ -214,6 +214,15 @@ export default function FeesScreen({ route, navigation }: any) {
         </TouchableOpacity>
       </View>
 
+      {/* Single vertical scroll area: search + fee list + form + summary
+          scroll together so lower content/actions always stay reachable
+          on phone, tablet and web. Only ONE vertical scroller (no nesting). */}
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator
+      >
       <View style={styles.searchBox}>
         <TextInput
           placeholder="Search by student name, roll no, or admission no"
@@ -240,11 +249,8 @@ export default function FeesScreen({ route, navigation }: any) {
             </Text>
           </View>
         ) : (
-          <FlatList
-            data={visibleFees}
-            keyExtractor={(item: FeeRecord) => item.id}
-            renderItem={({ item }: any) => (
-              <>
+          visibleFees.map((item: FeeRecord) => (
+            <React.Fragment key={item.id}>
               <View style={styles.feeItem}>
                 <View style={styles.feeInfo}>
                   <Text style={styles.feeStudent}>{feeName(item)}</Text>
@@ -284,9 +290,8 @@ export default function FeesScreen({ route, navigation }: any) {
                   onPress={() => handleDelete(item.id)}
                 />
               </View>
-              </>
-            )}
-          />
+            </React.Fragment>
+          ))
         )}
       </View>
 
@@ -456,6 +461,7 @@ export default function FeesScreen({ route, navigation }: any) {
           </Text>
         </View>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   )
 }
@@ -493,6 +499,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+    ...(Platform.OS === 'web' ? { height: '100vh' as any } : null),
+  },
+  // Fills the area under the fixed header; the whole page content
+  // (search, fee list, add/edit form, summary) scrolls inside it.
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
   },
   header: {
     padding: 20,
