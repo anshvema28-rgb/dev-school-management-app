@@ -8,9 +8,10 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Alert,
+
   KeyboardAvoidingView,
 } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 const MONTHS = [
@@ -162,16 +163,18 @@ export default function TeachersScreen({ route, navigation }: any) {
   // ---- Homeroom assignment ----
   const assignHomeroom = async (profileId: string, classId: string | null) => {
     // Clear this teacher from any class they currently homeroom
-    await supabase
+    const { error: clearErr } = await supabase
       .from('classes')
       .update({ homeroom_teacher_id: null })
       .eq('homeroom_teacher_id', profileId)
+    if (clearErr) throw clearErr
     // Assign to the newly selected class
     if (classId) {
-      await supabase
+      const { error: assignErr } = await supabase
         .from('classes')
         .update({ homeroom_teacher_id: profileId })
         .eq('id', classId)
+      if (assignErr) throw assignErr
     }
   }
 
@@ -242,7 +245,6 @@ export default function TeachersScreen({ route, navigation }: any) {
           assigned_class_id: form.class_id || null,
         }
 
-        console.log('[Teachers] create-teacher: invocation started ->', CREATE_TEACHER_URL)
         const resp = await fetch(CREATE_TEACHER_URL, {
           method: 'POST',
           headers: {
@@ -254,7 +256,6 @@ export default function TeachersScreen({ route, navigation }: any) {
         })
 
         const result = await resp.json().catch(() => ({}))
-        console.log('[Teachers] create-teacher: HTTP status =', resp.status)
 
         if (!resp.ok) {
           // Surface the real server message (error / message / msg) instead of
@@ -267,13 +268,11 @@ export default function TeachersScreen({ route, navigation }: any) {
             ? serverMsg
             : `create-teacher Edge Function returned HTTP ${resp.status} with no error body. ` +
               'The function is probably not deployed yet (supabase functions deploy create-teacher).'
-          console.log('[Teachers] create-teacher: safe error ->', detail)
           Alert.alert('Error', detail)
           setSaving(false)
           return
         }
 
-        console.log('[Teachers] create-teacher: success')
         Alert.alert('Success', 'Teacher account created successfully')
       }
 
@@ -290,11 +289,14 @@ export default function TeachersScreen({ route, navigation }: any) {
 
   // Insert or update the `teachers` detail row for a profile
   const upsertTeacherRecord = async (profileId: string) => {
-    const { data: existingTeacher } = await supabase
+    const { data: existingTeacher, error: readErr } = await supabase
       .from('teachers')
       .select('id')
       .eq('profile_id', profileId)
       .maybeSingle()
+    // Never fall through to INSERT when the read failed — that could create
+    // a duplicate teachers detail row for the same profile.
+    if (readErr) throw readErr
 
     const payload = {
       specialization: form.specialization.trim(),

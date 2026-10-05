@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { StatusBar } from 'expo-status-bar'
+import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native'
 import LoginScreen from './LoginScreen'
 import DashboardScreen from './DashboardScreen'
 import StudentDashboardScreen from './StudentDashboardScreen'
@@ -11,7 +12,6 @@ import StudentProfileScreen from './StudentProfileScreen'
 import FeesScreen from './FeesScreen'
 import TeachersScreen from './TeachersScreen'
 import ClassesScreen from './ClassesScreen'
-import ExamsScreen from './ExamsScreen'
 import ExamManagementScreen from './ExamManagementScreen'
 import HomeworkScreen from './HomeworkScreen'
 import StudentHomeworkScreen from './StudentHomeworkScreen'
@@ -34,7 +34,10 @@ import { supabase } from './supabaseClient'
 export default function App() {
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
-  const [view, setView] = useState('admin') // 'admin' | 'student' | 'teacher' | admin sub-views
+  // 'loading' = session/role being resolved · 'ok' = known role ·
+  // 'unknown' = role missing or lookup failed. Unknown NEVER opens Admin.
+  const [roleStatus, setRoleStatus] = useState('loading')
+  const [view, setView] = useState('resolving')
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [attendanceReturnTo, setAttendanceReturnTo] = useState('admin')
   const [homeworkDetailRoute, setHomeworkDetailRoute] = useState({ params: {} })
@@ -64,16 +67,19 @@ export default function App() {
   }, [])
 
   // Resolve the signed-in user's role so we can pick the right dashboard.
-  // The default stays the Admin Dashboard, so nothing existing breaks.
+  // Strict routing: Admin is opened ONLY for role === 'admin'. Unknown or
+  // failed role resolution shows a safe sign-out state instead of Admin.
   useEffect(() => {
     if (!user) {
       setRole(null)
-      setView('admin')
+      setRoleStatus('loading')
+      setView('resolving')
       navigatedByUser.current = false // fresh session starts on its own dashboard
       return
     }
 
     let active = true
+    setRoleStatus('loading')
 
     const resolveRole = async () => {
       try {
@@ -85,22 +91,29 @@ export default function App() {
         if (!active) return
         const raw = error ? null : data && data.role ? data.role : null
         const r = typeof raw === 'string' ? raw.trim().toLowerCase() : null
-        console.log('[App] profile role resolved:', r || '(none)')
-        setRole(r)
-        if (navigatedByUser.current) return // keep the screen the user opened
-        if (r === 'student') {
-          setView('student')
-        } else if (r === 'teacher') {
-          setView('teacher')
-        } else if (r === 'parent') {
-          setView('parent')
+
+        if (r === 'admin' || r === 'teacher' || r === 'student' || r === 'parent') {
+          setRole(r)
+          setRoleStatus('ok')
+          if (navigatedByUser.current) return // keep the screen the user opened
+          if (r === 'student') {
+            setView('student')
+          } else if (r === 'teacher') {
+            setView('teacher')
+          } else if (r === 'parent') {
+            setView('parent')
+          } else {
+            setView('admin')
+          }
         } else {
-          setView('admin')
+          // null / unknown role — do NOT fall through to the Admin dashboard.
+          setRole(null)
+          setRoleStatus('unknown')
         }
       } catch (e) {
         if (!active) return
         setRole(null)
-        if (!navigatedByUser.current) setView('admin')
+        setRoleStatus('unknown')
       }
     }
 
@@ -113,6 +126,31 @@ export default function App() {
 
   if (!user) {
     return <LoginScreen />
+  }
+
+  // Role still resolving — small loading state; prevents any Admin flash.
+  if (roleStatus === 'loading') {
+    return (
+      <View style={styles.bootFill}>
+        <ActivityIndicator size="large" color="#1A237E" />
+        <Text style={styles.bootText}>Verifying your account…</Text>
+      </View>
+    )
+  }
+
+  // Role missing or lookup failed — never open Admin; return to login safely.
+  if (roleStatus === 'unknown') {
+    return (
+      <View style={styles.bootFill}>
+        <Text style={styles.bootTitle}>We could not verify your account access.</Text>
+        <Text style={styles.bootText}>
+          Please sign in again. If this keeps happening, contact the school administrator.
+        </Text>
+        <TouchableOpacity style={styles.bootBtn} onPress={() => supabase.auth.signOut()}>
+          <Text style={styles.bootBtnText}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
+    )
   }
 
   // ---- Navigation shims (no navigation library — state based) ----
@@ -161,7 +199,6 @@ export default function App() {
 
   // Admin quick-action handler. Attendance remembers where to return.
   const openAdmin = (screen) => {
-    console.log('[App] openAdmin ->', screen)
     navigatedByUser.current = true
     if (screen === 'attendance') {
       setAttendanceReturnTo('admin')
@@ -355,7 +392,7 @@ export default function App() {
           navigation={backToAdmin}
           role={role}
           onManageStaff={
-            role === 'admin' || role === null ? () => setView('teachers') : undefined
+            role === 'admin' ? () => setView('teachers') : undefined
           }
         />
       </>
@@ -424,8 +461,46 @@ export default function App() {
       <StatusBar style="auto" />
       <DashboardScreen
         onOpenStudentView={role === 'student' ? undefined : () => setView('student')}
-        onNavigate={role === 'admin' || role === null ? openAdmin : undefined}
+        onNavigate={role === 'admin' ? openAdmin : undefined}
       />
     </>
   )
 }
+
+// Boot / role-verification states (Fix: fail-open admin routing)
+const styles = StyleSheet.create({
+  bootFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#FFFFFF',
+  },
+  bootTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A237E',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  bootText: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  bootBtn: {
+    marginTop: 18,
+    backgroundColor: '#1A237E',
+    borderRadius: 12,
+    minHeight: 44,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bootBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+})

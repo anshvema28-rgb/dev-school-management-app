@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, TextInput, Button, StyleSheet, Alert, ActivityIndicator, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 interface FeeRecord {

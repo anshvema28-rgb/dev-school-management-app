@@ -8,9 +8,10 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Alert,
+
   KeyboardAvoidingView,
 } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 const MONTHS = [

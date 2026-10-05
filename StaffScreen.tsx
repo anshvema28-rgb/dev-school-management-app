@@ -49,7 +49,7 @@ export default function StaffScreen({
       if (pErr) throw pErr
 
       // extra staff details (designation / status) when permitted by RLS
-      const { data: details } = await supabase
+      const { data: details, error: detErr } = await supabase
         .from('teachers')
         .select('profile_id, specialization, qualifications, status')
       const detMap: Record<string, any> = {}
@@ -57,11 +57,19 @@ export default function StaffScreen({
         if (d && d.profile_id) detMap[d.profile_id] = d
       })
 
+      // Removed teachers intentionally keep their profiles row (identity and
+      // auth account preserved), so hide teacher profiles that have no
+      // teachers detail row. Admin profiles are ALWAYS shown.
+      // If the details query itself failed, do NOT hide anyone (detailsOk).
+      const detailsOk = !detErr && !!details
+
       setStaff(
-        ((profs || []) as any[]).map((p) => ({
-          ...p,
-          detail: detMap[p.id] || null,
-        }))
+        ((profs || []) as any[])
+          .map((p) => ({
+            ...p,
+            detail: detMap[p.id] || null,
+          }))
+          .filter((s) => !detailsOk || s.role === 'admin' || !!s.detail)
       )
     } catch (err: any) {
       setError(err.message || 'Unable to load staff directory')

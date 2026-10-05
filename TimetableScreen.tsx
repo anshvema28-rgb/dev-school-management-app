@@ -9,8 +9,9 @@ import {
   Platform,
   Modal,
   TextInput,
-  Alert,
+
 } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 const DAY_NAMES = [

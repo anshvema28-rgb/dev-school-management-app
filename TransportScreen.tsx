@@ -8,8 +8,9 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Alert,
+
 } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 // Transport module — NEW tables (migration 008):

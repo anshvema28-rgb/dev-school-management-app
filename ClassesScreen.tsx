@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
   Platform,
   TextInput,
-  Alert,
+
 } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 // ---- Class options (Class 1-12) and Section options (A-E) ----

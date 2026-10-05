@@ -8,8 +8,9 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Alert,
+
 } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 // Subjects module — reuses the EXISTING `subjects` table (001) and the new

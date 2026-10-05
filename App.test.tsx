@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, ActivityIndicator, Button, Alert } from 'react-native'
+import { View, Text, ActivityIndicator, Button } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 export default function TestSupabaseScreen() {

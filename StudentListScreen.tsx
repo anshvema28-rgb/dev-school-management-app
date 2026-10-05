@@ -4,13 +4,14 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  Alert,
+
   ActivityIndicator,
   ScrollView,
   TouchableOpacity,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 const CREATE_STUDENT_URL =

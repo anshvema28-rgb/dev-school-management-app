@@ -8,8 +8,9 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Alert,
+
 } from 'react-native'
+import { Alert } from './safeAlert'
 import { supabase } from './supabaseClient'
 
 // Syllabus module — NEW table `syllabus` (migration 007).

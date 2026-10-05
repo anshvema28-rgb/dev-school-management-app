@@ -4,7 +4,7 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  Alert,
+
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -227,7 +227,11 @@ export default function LoginScreen() {
     setBanner(null)
     setForgotLoading(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(username)
+      const { error } = await supabase.auth.resetPasswordForEmail(username, {
+        // Production web app — the reset link should return here after
+        // the user sets a new password.
+        redirectTo: 'https://dev-school-management-app.vercel.app',
+      })
       if (error) {
         showError(error.message || 'Unable to send the password reset email.')
       } else {
@@ -516,7 +520,11 @@ export default function LoginScreen() {
               Don't have an account?{' '}
               <Text
                 style={styles.registerLinkText}
-                onPress={() => Alert.alert('Register', 'Registration coming soon')}
+                onPress={() =>
+                  showInfo(
+                    'Registration coming soon — please contact the school administrator to create your account.'
+                  )
+                }
               >
                 Register
               </Text>
