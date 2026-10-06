@@ -291,7 +291,7 @@ export default function App() {
     return (
       <>
         <StatusBar style="auto" />
-        <StudentListScreen route={{ params: {} }} navigation={adminNav} />
+        <StudentListScreen route={{ params: {} }} navigation={adminNav} role={role} />
       </>
     )
   }
@@ -345,7 +345,7 @@ export default function App() {
     return (
       <>
         <StatusBar style="auto" />
-        <ClassesScreen route={{ params: {} }} navigation={backToAdmin} />
+        <ClassesScreen route={{ params: {} }} navigation={backToAdmin} role={role} />
       </>
     )
   }

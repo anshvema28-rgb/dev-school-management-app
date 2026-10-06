@@ -260,7 +260,6 @@ export default function TeacherDashboardScreen({
             )
             .in('class_id', classIds)
             .order('roll_no', { ascending: true })
-            .limit(200)
           if (!active) return
           if (stuRes.error) {
             // Fallback: retry without the profile embed
@@ -269,7 +268,6 @@ export default function TeacherDashboardScreen({
               .select('id, profile_id, roll_no, admission_no, class_id')
               .in('class_id', classIds)
               .order('roll_no', { ascending: true })
-              .limit(200)
             if (!active) return
             if (altRes.error) problems.push(altRes.error.message)
             setStudents((altRes.data as any[]) ?? [])
@@ -573,24 +571,28 @@ export default function TeacherDashboardScreen({
   const moduleCards: any[] = [
     {
       key: 'classes',
+      route: 'classes',
       title: 'My Classes',
       emoji: '📚',
       subtitle: classes.length > 0 ? `${classes.length} assigned` : 'No classes yet',
     },
     {
       key: 'students',
+      route: 'students',
       title: 'My Students',
       emoji: '👨‍🎓',
       subtitle: students.length > 0 ? `${students.length} enrolled` : 'No records yet',
     },
     {
       key: 'attendance',
+      route: 'attendance',
       title: 'Attendance',
       emoji: '📋',
       subtitle: todayPct !== null ? `${todayPct}% today` : 'Not marked yet',
     },
     {
       key: 'homework',
+      route: 'homework',
       title: 'Homework',
       emoji: '📖',
       subtitle:
@@ -598,6 +600,7 @@ export default function TeacherDashboardScreen({
     },
     {
       key: 'exams',
+      route: 'exams',
       title: 'Exams & Results',
       emoji: '📝',
       subtitle:
@@ -605,6 +608,7 @@ export default function TeacherDashboardScreen({
     },
     {
       key: 'timetable',
+      route: 'timetable',
       title: 'Timetable',
       emoji: '🕐',
       subtitle:
@@ -612,6 +616,7 @@ export default function TeacherDashboardScreen({
     },
     {
       key: 'notices',
+      route: 'notices',
       title: 'Notices',
       emoji: '📢',
       subtitle:
@@ -753,7 +758,7 @@ export default function TeacherDashboardScreen({
           ))}
         </View>
 
-        {/* ---------- Module cards (3D grid) ---------- */}
+        {/* ---------- Quick Modules (primary navigation, directly after Overview) ---------- */}
         <SectionTitle text="Quick Modules" />
         <View style={styles.grid}>
           {moduleCards.map((m) => (
@@ -761,7 +766,11 @@ export default function TeacherDashboardScreen({
               key={m.key}
               style={styles.modWrap}
               activeOpacity={0.85}
-              onPress={() => (m.route && onNavigate ? onNavigate(m.route) : scrollTo(m.key))}
+              onPress={() =>
+                (m.key === 'attendance' && onOpenAttendance)
+                  ? onOpenAttendance()
+                  : (m.route && onNavigate ? onNavigate(m.route) : scrollTo(m.key))
+              }
             >
               <View style={styles.modCard}>
                 <View style={styles.modTop}>
@@ -820,7 +829,7 @@ export default function TeacherDashboardScreen({
                     <View style={styles.classStats}>
                       <View style={styles.classStat}>
                         <Text style={styles.classStatValue}>
-                          {count > 0 ? String(count) : '—'}
+                          {String(count)}
                         </Text>
                         <Text style={styles.classStatLabel}>Students</Text>
                       </View>
@@ -859,7 +868,7 @@ export default function TeacherDashboardScreen({
                 No student records available for your classes yet
               </Text>
             ) : (
-              students.slice(0, 20).map((s) => {
+              students.map((s) => {
                 const name =
                   (s.profiles && s.profiles.full_name) ||
                   s.roll_no ||

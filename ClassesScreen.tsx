@@ -44,7 +44,9 @@ const byGradeSection = (a: any, b: any) => {
   return na < nb ? -1 : na > nb ? 1 : 0
 }
 
-export default function ClassesScreen({ route, navigation }: any) {
+export default function ClassesScreen({ route, navigation, role }: any) {
+  // Class creation/updates/deletion are admin-only (UI gate; RLS unchanged).
+  const canManage = role === 'admin'
   const [classes, setClasses] = useState<any[]>([])
   const [subjects, setSubjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,6 +96,7 @@ export default function ClassesScreen({ route, navigation }: any) {
 
   // ---- Add / Edit / Delete class ----
   const openAdd = () => {
+    if (!canManage) return
     setEditingId(null)
     setGrade(null)
     setSection('')
@@ -107,6 +110,7 @@ export default function ClassesScreen({ route, navigation }: any) {
   }
 
   const openEdit = (c: any) => {
+    if (!canManage) return
     setEditingId(c.id)
     setGrade(typeof c.grade_level === 'number' ? c.grade_level : null)
     setSection(c.section || '')
@@ -140,6 +144,7 @@ export default function ClassesScreen({ route, navigation }: any) {
   }
 
   const saveClass = async () => {
+    if (!canManage) return
     if (grade === null) {
       Alert.alert('Validation', 'Please select a class/grade.')
       return
@@ -195,6 +200,7 @@ export default function ClassesScreen({ route, navigation }: any) {
   }
 
   const deleteClass = (c: any) => {
+    if (!canManage) return
     Alert.alert(
       'Delete Class',
       `Delete ${c.name}? Classes referenced by students, attendance, homework, exams or timetable cannot be removed until those records are cleared.`,
@@ -258,11 +264,13 @@ export default function ClassesScreen({ route, navigation }: any) {
         >
           <Text style={styles.sectionLabel}>Classes ({classes.length})</Text>
 
-          <TouchableOpacity style={styles.addBtn} onPress={openAdd} activeOpacity={0.8}>
-            <Text style={styles.addBtnText}>＋ Add Class</Text>
-          </TouchableOpacity>
+          {canManage ? (
+            <TouchableOpacity style={styles.addBtn} onPress={openAdd} activeOpacity={0.8}>
+              <Text style={styles.addBtnText}>＋ Add Class</Text>
+            </TouchableOpacity>
+          ) : null}
 
-          {showForm ? (
+          {showForm && canManage ? (
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>
                 {editingId ? 'Edit Class' : 'Add Class'}
@@ -380,26 +388,28 @@ export default function ClassesScreen({ route, navigation }: any) {
                     {c.academic_year || '—'}
                     {c.semester ? ` • ${c.semester}` : ''}
                   </Text>
-                  <View style={styles.cardActions}>
-                    <TouchableOpacity
-                      style={styles.smallBtn}
-                      onPress={() => openEdit(c)}
-                      activeOpacity={0.8}
-                      disabled={saving}
-                    >
-                      <Text style={styles.smallBtnText}>Edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.smallBtn, styles.smallBtnDanger]}
-                      onPress={() => deleteClass(c)}
-                      activeOpacity={0.8}
-                      disabled={saving}
-                    >
-                      <Text style={[styles.smallBtnText, styles.smallBtnTextDanger]}>
-                        Delete
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                  {canManage ? (
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity
+                        style={styles.smallBtn}
+                        onPress={() => openEdit(c)}
+                        activeOpacity={0.8}
+                        disabled={saving}
+                      >
+                        <Text style={styles.smallBtnText}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.smallBtn, styles.smallBtnDanger]}
+                        onPress={() => deleteClass(c)}
+                        activeOpacity={0.8}
+                        disabled={saving}
+                      >
+                        <Text style={[styles.smallBtnText, styles.smallBtnTextDanger]}>
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             ))

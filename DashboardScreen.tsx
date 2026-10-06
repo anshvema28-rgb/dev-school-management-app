@@ -657,9 +657,9 @@ export default function DashboardScreen({
           ))}
         </View>
 
-        {/* ---------- Quick actions ---------- */}
+        {/* ---------- Quick modules ---------- */}
         <Entrance delay={90}>
-          <SectionTitle text="Quick Actions" />
+          <SectionTitle text="Quick Modules" />
         </Entrance>
         <View style={styles.grid}>
           {quickActions.map((m, idx) => (

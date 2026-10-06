@@ -55,7 +55,9 @@ const EMPTY_FORM = {
   parent_phone: '',
 }
 
-export default function StudentListScreen({ route, navigation }: any) {
+export default function StudentListScreen({ route, navigation, role }: any) {
+  // Student create/edit/delete are admin-only (UI gate; RLS unchanged).
+  const canManage = role === 'admin'
   const [students, setStudents] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
   const [search, setSearch] = useState('')
@@ -107,6 +109,7 @@ export default function StudentListScreen({ route, navigation }: any) {
   }, [])
 
   const handleDelete = async (studentId: string) => {
+    if (!canManage) return
     const message =
       'Remove this student record? The Supabase Auth account is NOT deleted (that requires a secure server-side process).'
 
@@ -150,6 +153,7 @@ export default function StudentListScreen({ route, navigation }: any) {
 
   // ---- Create Student Account (secure Edge Function) ----
   const createStudentAccount = async () => {
+    if (!canManage) return
     if (!form.full_name.trim()) {
       Alert.alert('Validation', 'Please enter the student\'s full name.')
       return
@@ -227,6 +231,7 @@ export default function StudentListScreen({ route, navigation }: any) {
   }
 
   const openCreateForm = () => {
+    if (!canManage) return
     setForm(EMPTY_FORM)
     setShowPassword(false)
     setShowForm(true)
@@ -255,6 +260,7 @@ export default function StudentListScreen({ route, navigation }: any) {
   }
 
   const openEdit = (student: any) => {
+    if (!canManage) return
     if (navigation && navigation.navigate) {
       navigation.navigate('StudentForm', { student })
     }
@@ -265,9 +271,11 @@ export default function StudentListScreen({ route, navigation }: any) {
       <View style={styles.header}>
         <Text style={styles.headerText}>Student Management</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.createBtn} onPress={openCreateForm} activeOpacity={0.8}>
-            <Text style={styles.createBtnText}>＋ Create Account</Text>
-          </TouchableOpacity>
+          {canManage ? (
+            <TouchableOpacity style={styles.createBtn} onPress={openCreateForm} activeOpacity={0.8}>
+              <Text style={styles.createBtnText}>＋ Create Account</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation && navigation.goBack && navigation.goBack()}
@@ -380,20 +388,24 @@ export default function StudentListScreen({ route, navigation }: any) {
                       >
                         <Text style={styles.actionBtnText}>View</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => openEdit(s)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.actionBtnText}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnDanger]}
-                        onPress={() => handleDelete(s.id)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.actionBtnDangerText}>Remove</Text>
-                      </TouchableOpacity>
+                      {canManage ? (
+                        <>
+                          <TouchableOpacity
+                            style={styles.actionBtn}
+                            onPress={() => openEdit(s)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.actionBtnText}>Edit</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnDanger]}
+                            onPress={() => handleDelete(s.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.actionBtnDangerText}>Remove</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
                     </View>
                   </View>
                 </View>
@@ -404,7 +416,7 @@ export default function StudentListScreen({ route, navigation }: any) {
       )}
 
       {/* ---- Create Student Account form overlay ---- */}
-      {showForm ? (
+      {showForm && canManage ? (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.formOverlay}

@@ -131,14 +131,19 @@ export default function ComplaintsScreen({
         setSaving(false)
         return
       }
-      const own = await supabase.from('students').select('id').eq('profile_id', uid)
-      if (own.error) throw own.error
-      const rows = (own.data || []) as any[]
-      const studentId = rows.length > 0 ? rows[0].id : null
-      if (!studentId) {
-        Alert.alert('Error', 'Your student record was not found. Please contact the office.')
-        setSaving(false)
-        return
+      // Students must link to their own students row; teacher/admin file
+      // staff complaints with student_id = null (enforced by RLS, migration 021).
+      let studentId: string | null = null
+      if (role === 'student') {
+        const own = await supabase.from('students').select('id').eq('profile_id', uid)
+        if (own.error) throw own.error
+        const rows = (own.data || []) as any[]
+        studentId = rows.length > 0 ? rows[0].id : null
+        if (!studentId) {
+          Alert.alert('Error', 'Your student record was not found. Please contact the office.')
+          setSaving(false)
+          return
+        }
       }
       const { error: err } = await supabase.from('complaints').insert({
         student_id: studentId,
@@ -216,7 +221,7 @@ export default function ComplaintsScreen({
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          {role === 'student' ? (
+          {role === 'student' || role === 'teacher' || role === 'admin' ? (
             <TouchableOpacity
               style={styles.addBtn}
               onPress={() => setShowCreate(!showCreate)}
